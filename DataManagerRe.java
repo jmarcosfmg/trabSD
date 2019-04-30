@@ -26,7 +26,7 @@ public class DataManagerRe {
   private Map<BigInteger, byte[]> hashMap = new HashMap<>();
   private LogFileManager logfile = new LogFileManager();
 
-  // Carrega Records do log.txt para a memoria
+  // Carrega Records do log para a memoria
   public void loadRecordsFromFile(){
     List<Record> listOfRecords = logfile.readRecords();
     for (Record record : listOfRecords){
@@ -103,7 +103,7 @@ class Record {
   private String label;
   private byte[] data;
 
-  // Record é o 'struct/Json' que caracterisa um comando, serve para juntar os 3 valores: operaçao, chave do map e valor
+  // Estrutura para agrupar todos os dados
   Record(BigInteger key, String label){
     this.key = key;
     this.label = label;
@@ -125,6 +125,7 @@ class Record {
   public String getLabel() {
     return label;
   }
+
 }
 
 class LogFileManager {
@@ -172,12 +173,9 @@ class LogFileManager {
    // Adiciona Registros Record no arquivo
    public void writeRecord(Record record){
      try {
-       writer.write(record.getLabel().getBytes());
-       writer.write(" ".getBytes());
-       writer.write(record.getKey().toString().getBytes());
+       writer.write( (record.getLabel() + " " + record.getKey().toString() + "\n").getBytes() );
        if(!record.getLabel().equals("D")){
-         writer.write("\n".getBytes());
-         writer.write(record.getData());
+         writer.write( (new String(record.getData()) + "\n").getBytes() );
        }
        writer.flush();
      } catch (Exception e) {
