@@ -34,7 +34,7 @@ public class Servidor extends Thread {
 				System.out.println("Esperando alguma requisição ao BD");
 				Socket conexao = s.accept();
 				// cria uma nova thread para tratar essa conexão
-				System.out.println("Recebida conexao " + conexao);
+				System.out.println("Recebida conexao na porta " + conexao.getPort());
 				Thread t = new Servidor(conexao);
 
 				t.start();
@@ -69,7 +69,7 @@ public class Servidor extends Thread {
 				// agora, verifica se string recebida é valida, pois
 				// sem a conexão foi interrompida, a string é null.
 				// Se isso ocorrer, deve-se terminar a execução.
-				System.out.println("opcao escolhida: "+opcao);
+				System.out.println("Opcao escolhida: "+opcao);
 				if (opcao == 5){
 					break;
 				}
@@ -80,10 +80,12 @@ public class Servidor extends Thread {
 					//System.out.println(chave);
 					//saida.println("Entre com o valor:");
 					valor = entrada.readLine().getBytes();	
-					if(mapa.create(chave, valor) == 0 && logfile.writeRecord(new Record(chave, "C", valor)) ) 
+					if(mapa.create(chave, valor) == 0 && logfile.writeRecord(new Record(chave, "C", valor))) { 
 						saida.println("Inserido com sucesso");
-					else 
+					}
+					else {
 						saida.println("Erro na insercao");
+					}
 				}
 				// GET
 				else if (opcao == 2){
@@ -128,20 +130,24 @@ public class Servidor extends Thread {
 				// simultâneos.
 				// Verificar se linha é null (conexão interrompida)
 				// Se não for nula, pode-se compará-la com métodos string
-				}catch(NumberFormatException e){}
+				
+				}catch(NullPointerException a) {
+				}
+				catch(Exception a) {
+					saida.println("Erro, operacao não foi efetuada. "+a);
+				}
 			}
 			// Uma vez que o cliente enviou linha em branco, retira-se
 			// fluxo de saída do vetor de clientes e fecha-se conexão.
 			Fila_F1.remove(saida);
 			logfile.closeFile();
+			System.out.println(conexao.getPort()+" se desconectou"); 
 			conexao.close();
-		}
-		catch (IOException e) {
-			// Caso ocorra alguma excessão de E/S, mostre qual foi.
-			System.out.println("IOException: " + e);
-		}
+	}catch (IOException e) {
+		// Caso ocorra alguma excessão de E/S, mostre qual foi.
+		System.out.println("IOException: " + e);
 	}
-
+}
 	// Carrega Records do log para a memoria
   public void loadRecordsFromFile(){
     List<Record> listOfRecords = logfile.readRecords();
