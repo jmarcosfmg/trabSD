@@ -1,6 +1,7 @@
 import java.io.*;
 import java.net.*;
 import java.util.*;
+import java.util.concurrent.*;
 import java.util.Map;
 import java.util.Arrays;
 import java.math.BigInteger;
@@ -10,191 +11,189 @@ public class Servidor extends Thread {
 
 	// Parte que controla as conexões por meio de threads.
 	// Note que a instanciação está no main.
-	private static Vector <PrintStream> Fila_F1;
-	private Mapa mapa;
-	private Socket conexao;
-	private int opcao;
-
-	// Objeto que manipula o Log
-	private LogFileManager logfile = new LogFileManager();
-
+	private static BlockingQueue<Comando> Fila_F1 = new LinkedBlockingDeque<>();
+	private static BlockingQueue<Comando> Fila_F2 = new LinkedBlockingDeque<>(); 
+	private static BlockingQueue<Comando> Fila_F3 = new LinkedBlockingDeque<>(); 
 	public static void main(String args[]) {
-		// instancia o vetor de clientes conectados
-		Fila_F1 = new Vector <PrintStream> ();
 		try {
-			// criando um socket que fica escutando a porta 2222.
+			// criando um socket que fica escutando a porta 5082.
 			ServerSocket s = new ServerSocket(5082);
+			
+			Thread t1 = new Thread(new Fila1Manager(Fila_F1,Fila_F2,Fila_F3)); //pega o que estiver na fila f1 e manda para fila f2 e fila f3
+			t1.start();
+			Thread t2 = new Thread(new MapManager(Fila_F2)); //pega o que estiver na fila f2 e faz as operacoes na memoria
+			t2.start();
+			Thread t3 = new Thread(new LogFileManager(Fila_F3,Fila_F1)); //pega o que estiver na fila f3 e faz as operacoes do log
+			t3.start();
+			System.out.println("Servidor inicializado");
 			// Loop principal.
 			while (true) {
-				// aguarda algum cliente se conectar. A execução do
-				// servidor fica bloqueada na chamada do método accept da
-				// classe ServerSocket. Quando algum cliente se conectar
-				// ao servidor, o método desbloqueia e retorna com um
-				// objeto da classe Socket, que é porta da comunicação.
-				System.out.println("Esperando alguma requisição ao BD");
-				Socket conexao = s.accept();
-				// cria uma nova thread para tratar essa conexão
+				Socket conexao = new Socket();
+				conexao = s.accept();
+				Thread t0 = new Thread(new Fila1Adder(Fila_F1,conexao)); //cada cliente tem uma thread responsavel por receber seus comandos e
+																		 //adiciona-los a fila
 				System.out.println("Recebida conexao na porta " + conexao.getPort());
-				Thread t = new Servidor(conexao);
-
-				t.start();
-				// voltando ao loop, esperando mais alguém se conectar.
+				t0.start();
 			}
 		}catch (IOException e) {
 			// caso ocorra alguma excessão de E/S, mostre qual foi.
 			System.out.println("IOException: " + e);
 		}
 	}
+}
 
-	public Servidor(Socket s) {
+class Comando{
+	private int operacao;
+	private BigInteger chave;
+	private byte[] valor;
+	private PrintStream cliente;
+	
+	public Comando(int op, BigInteger ch, byte[] val, PrintStream cl) {
+		operacao = op;
+		chave = ch;
+		valor = val;
+		cliente = cl;
+	}
+	public int getOperacao() {
+		return operacao;
+	}
+	public BigInteger getChave() {
+		return chave;
+	}
+	public byte[] getValor(){
+		return valor;
+	}
+	public PrintStream getCliente() {
+		return cliente;
+	}
+}
+
+class Fila1Adder implements Runnable {
+	private BlockingQueue<Comando>  Fila_F1;
+	private Socket conexao;
+	public Fila1Adder(BlockingQueue<Comando> a, Socket s) {
+		Fila_F1 = a;
 		conexao = s;
-		mapa = new Mapa();
-		logfile.openFile(); // prepara para escrever no arquivo
-		loadRecordsFromFile(); // carrega registros do arquivo
 	}
 	
-	// execução da thread
 	public void run() {
+		BigInteger chave = new BigInteger("0");
+		int opcao = 0;
+		byte[] valor = null;
 		try {
-			// objetos que permitem controlar fluxo de comunicação
 			BufferedReader entrada = new BufferedReader(new	InputStreamReader(conexao.getInputStream()));
 			Scanner ler = new Scanner(System.in);
-			PrintStream saida = new PrintStream(conexao.getOutputStream());
+			PrintStream saida = null;
+			saida = new PrintStream(conexao.getOutputStream());
+			if (saida == null) System.out.println("Erro, saida nula");
 			// primeiramente, espera-se a opcao do servidor 
-			BigInteger chave;
-			byte[] valor;
-			while(true){
-				try{
+			while(true){ 
 				opcao = Integer.parseInt(entrada.readLine());
 				// agora, verifica se string recebida é valida, pois
 				// sem a conexão foi interrompida, a string é null.
 				// Se isso ocorrer, deve-se terminar a execução.
-				System.out.println("Opcao escolhida: "+opcao);
+				System.out.println("Cliente: "+conexao.getPort()+". Opcao escolhida: "+opcao);
 				if (opcao == 5){
-					break;
+					throw new IOException();
 				}
 				// CREATE
 				else if (opcao == 1){
-					saida.println("Opcao selecionada = "+opcao);
 					chave = new BigInteger(entrada.readLine());
-					//System.out.println(chave);
-					//saida.println("Entre com o valor:");
-					valor = entrada.readLine().getBytes();	
-					if(mapa.create(chave, valor) == 0 && logfile.writeRecord(new Record(chave, "C", valor))) { 
-						saida.println("Inserido com sucesso");
-					}
-					else {
-						saida.println("Erro na insercao");
-					}
+					valor = entrada.readLine().getBytes();
 				}
 				// GET
 				else if (opcao == 2){
-					saida.println("Opcao selecionada = " + opcao);
 					chave = new BigInteger(entrada.readLine());
-					if(mapa.existe(chave)){
-						valor = mapa.read(chave);
-						String msgDecode = new String(valor); // convertendo byte para string
-						saida.println("Valor Procurado: " + msgDecode); // Exibir
-					} else {
-						saida.println("Valor nao encontrado"); // Exibir
-					}
-					
+					valor = null;
 				}
 				// UPDATE
 				else if (opcao == 3){
-					saida.println("Opcao selecionada = " + opcao);
 					chave = new BigInteger(entrada.readLine());
-					saida.println("Entre com o valor:");
 					valor = entrada.readLine().getBytes();	
-					if(mapa.update(chave,valor) == 0 && logfile.writeRecord(new Record(chave, "U", valor)))
-						saida.println("Atualizacao feita com sucesso");
-					else 
-						saida.println("Erro");
 				}
 				// DELETE
 				else if (opcao == 4){
-					//saida.println("Opcao selecionada = "+opcao+"Entre com a chave:");
 					chave = new BigInteger(entrada.readLine());
-					if(mapa.delete(chave) == 0 && logfile.writeRecord(new Record(chave, "D")) )
-						saida.println("Exclusao feita com sucesso");
-					else 
-						saida.println("Erro");
+					valor = null;
 				}
-				// Uma vez que se tem um cliente conectado
-				// coloca-se fluxo de saída para esse cliente no vetor de
-				// clientes conectados.
-				Fila_F1.add(saida);
-				// Fila_F1 é objeto compartilhado por várias threads!
-				// De acordo com o manual da API, os métodos são
-				// sincronizados. Portanto, não há problemas de acessos
-				// simultâneos.
-				// Verificar se linha é null (conexão interrompida)
-				// Se não for nula, pode-se compará-la com métodos string
-				
-				}catch(NullPointerException a) {
-				}
-				catch(Exception a) {
-					saida.println("Erro, operacao não foi efetuada. "+a);
-				}
+				Fila_F1.put(new Comando(opcao, chave, valor, new PrintStream(conexao.getOutputStream())));
 			}
-			// Uma vez que o cliente enviou linha em branco, retira-se
-			// fluxo de saída do vetor de clientes e fecha-se conexão.
-			Fila_F1.remove(saida);
-			logfile.closeFile();
+		}catch (Exception e) {
+			try{
 			System.out.println(conexao.getPort()+" se desconectou"); 
 			conexao.close();
-	}catch (IOException e) {
-		// Caso ocorra alguma excessão de E/S, mostre qual foi.
-		System.out.println("IOException: " + e);
+			}catch(IOException err){}
+		}
 	}
 }
-	// Carrega Records do log para a memoria
-  public void loadRecordsFromFile(){
-    List<Record> listOfRecords = logfile.readRecords();
-    for (Record record : listOfRecords){
-      executeRecord(record);
-    }
+
+class Fila1Manager implements Runnable{
+	private BlockingQueue<Comando>  Fila_F1;
+	private BlockingQueue<Comando>  Fila_F2;
+	private BlockingQueue<Comando>  Fila_F3; 
+	
+	public Fila1Manager(BlockingQueue<Comando> f1,BlockingQueue<Comando> f2,BlockingQueue<Comando> f3){
+		Fila_F1 = f1;
+		Fila_F2 = f2;
+		Fila_F3 = f3;
 	}
 	
-	// Decide qual operaçâo executar de acordo com a label/rotulo do Record
-  public void executeRecord(Record record){
-    switch (record.getLabel()){
-      case "C":
-         createRecord(record);
-         break;
-      case "U":
-         updateRecord(record);
-         break;
-      case "D":
-         deleteRecord(record);
-         break;
-     }
+	public void run(){
+		Comando comando;
+		System.out.println("Fila1Manager rodando");
+		while (true) {
+			try{
+				comando = (Comando) Fila_F1.take();
+				System.out.println("Comando ="+comando.getOperacao());
+				Fila_F2.put(comando);
+				Fila_F3.put(comando);
+			}catch(InterruptedException e){
+
+			}
+		}
+	}	
+}
+
+class MapManager implements Runnable{
+	private Mapa mapa;
+	private BlockingQueue<Comando>  Fila_F2; 
+	
+	public MapManager(BlockingQueue<Comando> f2){
+		Fila_F2 = f2;
+		mapa = new Mapa();
 	}
 	
-	public void createRecord(Record record){
-    mapa.create(record.getKey(), record.getData());
-  }
-
-  public void updateRecord(Record record){
-    mapa.update(record.getKey(), record.getData());
-  }
-
-  public void deleteRecord(Record record){
-    if(this.mapa.existe(record.getKey())){
-      mapa.delete(record.getKey());
-    }
+	public void run() {
+		Comando comando;
+		int opcao;
+		int flag = -1;
+		System.out.println("MapManager rodando");
+		while(true) {
+			try{
+				comando = (Comando) Fila_F2.take();
+				opcao = comando.getOperacao();
+				// CREATE
+				if (opcao == 1){
+					flag = mapa.create(comando.getChave(), comando.getValor());
+				}
+				// GET
+				else if (opcao == 2){
+					comando.getCliente().println(new String(mapa.read(comando.getChave())));
+					flag = 0;
+				}
+				// UPDATE
+				else if (opcao == 3){
+					flag = mapa.update(comando.getChave(), comando.getValor());
+					}
+				// DELETE
+				else if (opcao == 4){
+					flag = mapa.delete(comando.getChave());
+				}
+				if(flag == 1) comando.getCliente().println("Falha na operacao!");
+			}catch(InterruptedException e){
+			}catch(NullPointerException a){}
+		}
 	}
-	
-	// Imprime o HashMap como key --> value | caso quiser vaer tudo
-  public void printHashMap(){
-    for (BigInteger aKey: this.mapa.getMapa().keySet()){
-      System.out.println("key [bytes]: " + aKey + " | Value: " + new String(mapa.getMapa().get(aKey)) );
-    }
-    if(this.mapa.getMapa().isEmpty()){
-      System.out.println("O HashMap na memoria esta vazio!");
-    }
-  }
-
 }
 
 class Mapa{
@@ -244,43 +243,96 @@ class Mapa{
 
 }
 
-class Record {
+class LogFileManager implements Runnable{
+	private BlockingQueue<Comando>  Fila_F3;
+	private final String fileName = "log"; // Valor constantedo arquivo
+    public FileOutputStream writer;
 
-  private BigInteger key;
-  private String label;
-  private byte[] data;
-
-  // Estrutura para agrupar todos os dados
-  Record(BigInteger key, String label){
-    this.key = key;
-    this.label = label;
-    this.data = null;
-  }
-
-  Record(BigInteger key, String label, byte[] data){
-    this.key = key;
-    this.label = label;
-    this.data = data;
-  }
-
-  public byte[] getData() {
-    return data;
-  }
-  public BigInteger getKey() {
-    return key;
-  }
-  public String getLabel() {
-    return label;
-  }
-
-}
-
-class LogFileManager {
-
-  private final String fileName = "log"; // Valor constantedo arquivo
-
-  public FileOutputStream writer;
-
+	public LogFileManager(BlockingQueue<Comando> f3, BlockingQueue<Comando> f1) {
+		Fila_F3 = f3;
+		loadRecordsFromFile(f1);
+	}
+	
+	public void run(){
+		BigInteger chave;
+		byte[] valor;
+		int opcao;
+		Comando comando;
+		System.out.println("LogFileManager rodando");
+		while(true) {
+				try{
+			    comando = (Comando) Fila_F3.take();
+				openFile();
+				opcao = comando.getOperacao();
+				// CREATE
+				if (opcao == 1){
+					writeRecord(new Record(comando.getChave(), "C", comando.getValor()));
+				}
+				// GET
+				else if (opcao == 2){
+				}
+				// UPDATE
+				else if (opcao == 3){
+					writeRecord(new Record(comando.getChave(), "U", comando.getValor()));
+				}
+				// DELETE
+				else if (opcao == 4){
+					writeRecord(new Record(comando.getChave(), "D"));
+				}
+				closeFile();
+			}
+			catch(InterruptedException e){
+			}
+			catch(NullPointerException a){
+			}
+		}
+	}
+	// Carrega Records do log para a memoria
+	public void loadRecordsFromFile(BlockingQueue<Comando> f2){
+	    List<Record> listOfRecords = readRecords();
+	    for (Record record : listOfRecords){
+	    	executeRecord(record,f2);
+	    }	
+	}
+		
+	// Decide qual operaçâo executar de acordo com a label/rotulo do Record
+	  public void executeRecord(Record record, BlockingQueue<Comando> f2){
+	    switch (record.getLabel()){
+	      case "C":
+	         createRecord(record,f2);
+	         break;
+	      case "U":
+	         updateRecord(record,f2);
+	         break;
+	      case "D":
+	         deleteRecord(record,f2);
+	         break;
+	     }
+	}
+	
+	  public void createRecord(Record record, BlockingQueue<Comando> f2){
+	  	try{
+		  f2.put(new Comando(1,record.getKey(), record.getData(), null));
+		  }catch(InterruptedException e){
+	 		 }
+	  }
+	
+	  public void updateRecord(Record record, BlockingQueue<Comando> f2){
+		  try{
+		  f2.put(new Comando(3, record.getKey(), record.getData(),null));
+		  }
+	  catch(InterruptedException e){
+	  }
+	  }
+	
+	  public void deleteRecord(Record record, BlockingQueue<Comando> f2){
+	       try{
+	       f2.put(new Comando(4,record.getKey(), null, null));
+		   }
+		  catch(InterruptedException e){
+		  }
+	}
+	  
   // Retorna uma Lista do Tipo Record que leu do Arquivo 'log.txt'
   public List<Record> readRecords(){
     List<Record> listrecord = new ArrayList<Record>();
@@ -376,5 +428,34 @@ class LogFileManager {
      e.printStackTrace();
      System.exit(1);
    }
+}
 
+class Record {
+
+	  private BigInteger key;
+	  private String label;
+	  private byte[] data;
+
+	  // Estrutura para agrupar todos os dados
+	  Record(BigInteger key, String label){
+	    this.key = key;
+	    this.label = label;
+	    this.data = null;
+	  }
+
+	  Record(BigInteger key, String label, byte[] data){
+	    this.key = key;
+	    this.label = label;
+	    this.data = data;
+	  }
+
+	  public byte[] getData() {
+	    return data;
+	  }
+	  public BigInteger getKey() {
+	    return key;
+	  }
+	  public String getLabel() {
+	    return label;
+	  }
 }
