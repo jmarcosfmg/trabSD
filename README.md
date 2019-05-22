@@ -29,6 +29,7 @@ Links:
 
 
 **Executar no Linux (bash) **
+
 No linux (e no windows se você descobrir como) você pode executar script que executa vários comandos encadeados.
 
 Há os arquivos `serv.sh` e `cli.sh` que foram configurados para compilar e executar os arquivos de Servidor e Cliente.
@@ -45,7 +46,7 @@ Caso os srcipt `.sh` não funcionarem, você pode executar tudo manualmente.
 
 Descrição dos comandos JAVA:
 + `javac File_java.java` : Compila o arquivo `File_java.java`
-+ `java File_java `: Executa o arquivo `FIle_java.class` (o ByteCode)
++ `java File_java `: Executa o arquivo `File_java.class` (o ByteCode)
 
 Assim para executar o projeto será:
 ````
@@ -56,5 +57,6 @@ javac Cliente.java
 java Cliente
 ````
 
-Para remover arquivos .class (compilados):
+Para remover arquivos .class (os arquivos compilados (opcional)):
+
 `find . -type f -name '*.class' -delete`
