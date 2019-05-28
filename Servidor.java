@@ -14,16 +14,28 @@ public class Servidor extends Thread {
 	private static BlockingQueue < Comando > Fila_F1 = new LinkedBlockingDeque < >();
 	private static BlockingQueue < Comando > Fila_F2 = new LinkedBlockingDeque < >();
 	private static BlockingQueue < Comando > Fila_F3 = new LinkedBlockingDeque < >();
+
+	private static final int TIME_UPDATE_BD = 10 * 1000; // mili segundos
+
+	
 	
 	public static void main(String args[]) {
 		try {
+
 			// criando um socket que fica escutando a porta 5082.
 			ServerSocket s = new ServerSocket(5082);
 
 			Thread t1 = new Thread(new Fila1Manager(Fila_F1, Fila_F2, Fila_F3)); //pega o que estiver na fila f1 e manda para fila f2 e fila f3
 			t1.start();
-			Thread t2 = new Thread(new MapManager(Fila_F2)); //pega o que estiver na fila f2 e faz as operacoes na memoria
+
+			MapManager mapManager = new MapManager(Fila_F2);
+			TimerTask task = new TimerManagerBD(mapManager.getMapa()); // Thread que executa a cada u segundos. Tem a referencia ao Mapa da maemoria, a classe 'Mapa'
+			Timer timer = new Timer();
+			// schedules the task to be run in an interval 
+			timer.scheduleAtFixedRate(task, 0, TIME_UPDATE_BD);
+			Thread t2 = new Thread(mapManager); //pega o que estiver na fila f2 e faz as operacoes na memoria
 			t2.start();
+
 			Thread t3 = new Thread(new LogFileManager(Fila_F3, Fila_F2)); //pega o que estiver na fila f3 e faz as operacoes do log
 			t3.start();
 			System.out.println("Servidor inicializado");
@@ -41,6 +53,214 @@ public class Servidor extends Thread {
 			System.out.println("IOException: " + e);
 		}
 	}
+}
+
+/*
+
+=> Perguntar sobre o array de BYtes. Isso é chato e sem isso poderia usar JSON
+
+===> Estrutura da pasta bd
+bd/
+	SnapShot.1/
+		log.0
+		snap.1.txt
+	Snashot.2/
+		log.1
+		snap.2.txt
+
+PARTE DE RAFAEL: LOG E SNAPSHOT E BD:
+
++ Quando Inicializar o Servidor:
+	+ Se não houver nada:
+		+ não carrega nada
+	+ Se houver algum Snapshot:
+		+ Carrega no mapa o ultimo snapshot
+
++ Quando é feito um Snapshot:
+	+ Verifica qual será o seu contatdor:
+		+ Se nâo houver nenhum. Seŕa Zero
+		+ Se houver será o último mais um
+	+ Salva SnapSHot e Log
+	+ Verifica se há mais de 3 pastas
+		+ identificar a ultima pasta
+
+
+*/
+class TimerManagerBD extends TimerTask{
+
+		private Mapa mapa;
+
+		public static final String MY_DIRECTORY = System.getProperty("user.dir");
+
+		private final String SNAP_SHOT_DIR = "SnapShot";
+		private final String LOG_FILE = "log";
+		private final String SNAP_FILE = "snap";
+		private final String POINT = ".";
+		private final String DEFAULT_FILEPATH = MY_DIRECTORY + "/" + "bd" + "/";
+		
+		public TimerManagerBD(Mapa mapa){
+			this.mapa = mapa;
+		}
+
+		@Override
+		public void run() {
+
+			/**
+			 * ================ ATENÇAO ==================
+			 * Se atente com a diferneça entre a inicializaçao e uma execuçâo nromal
+			 * Se atente ao fato de pastsa nâo existirem no inicio. Fazer essa verificaçâo e crialas se nao existir
+			 * ==> Ele quer que tenha um arquivo de configuraçâo: usar JSON
+			 * ==> PErguntar se pode ser array de Char para usar JSON
+			 * ==> Ele quer que exista arquivos de teste para executar automaticamente as cosias da parte 1
+			
+			
+			
+			*/
+
+			// task to run goes here
+			System.out.println("Hello !!!");
+
+			// List<String> files;
+			// List<String> direc;
+			
+			// List<String>[] returnList = listFilesOfDirectory(MY_DIRECTORY);
+			// files = returnList[0];
+			// direc = returnList[1];
+
+			List<String> listDirectories = splitListOfFilesByType( listDirectory(TimerManagerBD.MY_DIRECTORY), SNAP_SHOT_DIR );
+			int nexCounter = getNextCounter(listDirectories);
+
+			String nextDirFilePath = DEFAULT_FILEPATH + SNAP_SHOT_DIR + POINT + Integer.toString(nexCounter);
+			String nextSnapFilePath = nextDirFilePath + "/" + SNAP_FILE + POINT + Integer.toString(nexCounter);
+			String nextLogFilePath = extDirFilePath + "/" + LOG_FILE + POINT + Integer.toString(nexCounter - 1);
+
+			new File(nextDirFilePath).mkdir(); // cria diretorio
+
+
+
+		}
+
+		// Retorna um array de duas posiçoes com array dinmaicos que tem
+		// respectivamente a lista de arquivos e de direotiros do diretorio passado em parametro
+		/************** Esta comentado posi talvez nâo vou precisar usar */
+		// private List<String>[] listFilesOfDirectory(String directory){
+
+		// 	List<String>[] returnList = new ArrayList<String>[2];
+		// 	returnList[0]= new ArrayList<String>(); // arquivos
+		// 	returnList[1]= new ArrayList<String>(); // diretorio
+
+		// 	File folder = new File(directory);
+    // 	File[] listOfFiles = folder.listFiles();
+			
+		// 	for (int i = 0; i < listOfFiles.length; i++) {
+		// 		if (listOfFiles[i].isFile()) {
+		// 			returnList[0].add(listOfFiles[i].getName());
+		// 		} else if (listOfFiles[i].isDirectory()) {
+		// 			returnList[1].add(listOfFiles[i].getName());
+		// 		}
+		// 	}
+   
+		// 	return returnList;
+		// }
+
+		// Retorna uma lista de diretorios de um diretorio
+		private List<String> listDirectory(String directory){
+			List<String> listDirectories = new ArrayList<String>();
+			File folder = new File(directory);
+    	File[] listOfFiles = folder.listFiles();
+			for (int i = 0; i < listOfFiles.length; i++) {
+				if (listOfFiles[i].isDirectory()) {
+					listDirectories.add(listOfFiles[i].getName());
+				}
+			}
+			return listDirectories;
+		}
+
+		// Verifica se ha pelo menos uma pasta com "SnapShot" valido
+		private Boolean existSnapShot(List<String> listDirectories){
+			if(listDirectories.isEmpty()){
+				return false;
+			} else{
+				// verificar se tem as pastas
+				return true;
+			}
+		}
+
+		// Verifica se ha alguma pasta que tenha o nome SnapHot no diretorio
+		private Boolean existSnapShotDirectory(List<String> listDirectories){
+			for (String dir : listDirectories) {
+					if(isTypeFile(dir, SNAP_SHOT_DIR)){
+						return true;
+					}
+			}
+			return false;
+		}
+
+		// Verifica se um arquivo/pasta é de um certo tipo
+		private Boolean isTypeFile(String file, String type){
+			String[] splitedString = file.split(POINT);
+			if(splitedString[0].equals(type)){
+				return true;
+			} else {
+				return false;
+			}
+		}
+
+		// retorna a lista de string de somente aquilo que eh de um certo tipo
+		// tipo, nas patas bd, passando uma lista e "Snapshit" so vai voltar pastas que comecem com SnapShot
+		private List<String> splitListOfFilesByType(List<String> files, String type){
+			List<String> filesOfType = new ArrayList<String>();
+			for (String arq : files) {
+				if(isTypeFile(arq, type)){
+					filesOfType.add(arq);
+				}
+			}
+			return filesOfType;
+		}
+		
+		// Retorna um array list de inteiros 
+		private List<Integer> convertArrayStringToInt(List<String> listDirectories){
+			List<Integer> intList = new ArrayList<Integer>();
+			String aux[];
+			String dirNumber;
+			for (String dir : listDirectories) {
+				aux = dir.split(POINT);
+				dirNumber = aux[1];
+				intList.add(Integer.parseInt(dirNumber));
+			}
+			return intList;
+		}
+
+		// Retorno o proximo contador a ser usado.
+		private int getNextCounter(List<String> listDirectories){
+			List<Integer> listNumbers = convertArrayStringToInt(listDirectories);
+			int max = Collections.max(listNumbers);
+			return max + 1;
+		}
+
+		// Retorna o numero da pasta a ser deletada ou -1 se nao achar
+		private int getCounterToDelete(List<String> listDirectories){
+			List<Integer> listCountsDir = convertArrayStringToInt(listDirectories);
+			if(listCountsDir.size() <= 3){
+				return -1;
+			} else{
+				return Collections.min(listCountsDir);
+			}
+		}
+
+		// Deleta um direotiro: e tudo que tiver dentro dele. Passa todo o seu FilePath
+		private void deleteDirectory(String directory){
+			File folder = new File(directory);
+    	File[] listOfFiles = folder.listFiles();
+			for (int i = 0; i < listOfFiles.length; i++) {
+				File currentFile = new File(directory + "/" + listOfFiles[i].getName());
+    		currentFile.delete();
+			}
+			folder.delete();
+		}
+
+	
+
 }
 
 
@@ -220,13 +440,16 @@ class MapManager implements Runnable {
 		}
 	}
 
+	public Mapa getMapa(){
+		return this.mapa;
+	}
+
 }
 
 
 class Mapa {
 
-	private Map < BigInteger,
-	byte[] > mapa;
+	private Map < BigInteger, byte[] > mapa;
 
 	public Mapa() {
 		this.mapa = new HashMap < >();
