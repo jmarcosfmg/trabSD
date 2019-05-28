@@ -7,6 +7,9 @@ import java.util.Arrays;
 import java.math.BigInteger;
 import java.util.Scanner;
 
+import util.datahandler.*;
+import util.memory.*;
+
 public class Servidor extends Thread {
 
 	// Parte que controla as conexões por meio de threads.
@@ -15,7 +18,7 @@ public class Servidor extends Thread {
 	private static BlockingQueue < Comando > Fila_F2 = new LinkedBlockingDeque < >();
 	private static BlockingQueue < Comando > Fila_F3 = new LinkedBlockingDeque < >();
 
-	private static final int TIME_UPDATE_BD = 10 * 1000; // mili segundos
+	private static final int TIME_UPDATE_BD = 5 * 1000; // mili segundos
 
 	
 	
@@ -96,7 +99,7 @@ class TimerManagerBD extends TimerTask{
 		private final String LOG_FILE = "log";
 		private final String SNAP_FILE = "snap";
 		private final String POINT = ".";
-		private final String DEFAULT_FILEPATH = MY_DIRECTORY + "/" + "bd" + "/";
+		private final String DEFAULT_FILEPATH = MY_DIRECTORY + "/" + "bd";
 		
 		public TimerManagerBD(Mapa mapa){
 			this.mapa = mapa;
@@ -104,7 +107,6 @@ class TimerManagerBD extends TimerTask{
 
 		@Override
 		public void run() {
-
 			/**
 			 * ================ ATENÇAO ==================
 			 * Se atente com a diferneça entre a inicializaçao e uma execuçâo nromal
@@ -112,13 +114,49 @@ class TimerManagerBD extends TimerTask{
 			 * ==> Ele quer que tenha um arquivo de configuraçâo: usar JSON
 			 * ==> PErguntar se pode ser array de Char para usar JSON
 			 * ==> Ele quer que exista arquivos de teste para executar automaticamente as cosias da parte 1
-			
-			
-			
 			*/
+			int nexCounter = 88;
 
 			// task to run goes here
 			System.out.println("Hello !!!");
+
+			Boolean exist = existBdDir();
+			Boolean firstExecution = !exist;
+			if(!exist){
+				System.out.println("nao havia o direotiro, entao foi criado bd/ ");
+			}
+			
+			// log começa com zero e o primeiro numero sera 1
+			if(firstExecution){
+				nexCounter = 1; 
+
+			}
+
+			// Busca descobrir qual sera o proxmio counter a partir das pastas que ja existem
+			if(!firstExecution){
+				List<String> listDirectories = splitListOfFilesByType( listDirectory(TimerManagerBD.MY_DIRECTORY), SNAP_SHOT_DIR );
+			  nexCounter = getNextCounter(listDirectories);
+
+			}
+			
+			System.out.println(nexCounter);
+
+			String nextDirFilePath = DEFAULT_FILEPATH + "/" + SNAP_SHOT_DIR + POINT + Integer.toString(nexCounter);
+			String nextSnapFilePath = nextDirFilePath + "/" + SNAP_FILE + POINT + Integer.toString(nexCounter);
+			String nextLogFilePath = nextDirFilePath + "/" + LOG_FILE + POINT + Integer.toString(nexCounter - 1);
+
+			new File(nextDirFilePath).mkdir(); // cria diretorio
+
+			/** SALVA ARQUIVO DE LOG */
+			/** SALVA SNAP_SHOT */
+
+			// Verifica se vai precisar deletar algum arquivo
+			if(!firstExecution){
+
+			}
+
+
+			// Salav arquivos
 
 			// List<String> files;
 			// List<String> direc;
@@ -127,15 +165,10 @@ class TimerManagerBD extends TimerTask{
 			// files = returnList[0];
 			// direc = returnList[1];
 
-			List<String> listDirectories = splitListOfFilesByType( listDirectory(TimerManagerBD.MY_DIRECTORY), SNAP_SHOT_DIR );
-			int nexCounter = getNextCounter(listDirectories);
+			// List<String> listDirectories = splitListOfFilesByType( listDirectory(TimerManagerBD.MY_DIRECTORY), SNAP_SHOT_DIR );
+			// int nexCounter = getNextCounter(listDirectories);
 
-			String nextDirFilePath = DEFAULT_FILEPATH + SNAP_SHOT_DIR + POINT + Integer.toString(nexCounter);
-			String nextSnapFilePath = nextDirFilePath + "/" + SNAP_FILE + POINT + Integer.toString(nexCounter);
-			String nextLogFilePath = extDirFilePath + "/" + LOG_FILE + POINT + Integer.toString(nexCounter - 1);
-
-			new File(nextDirFilePath).mkdir(); // cria diretorio
-
+			
 
 
 		}
@@ -184,6 +217,34 @@ class TimerManagerBD extends TimerTask{
 				// verificar se tem as pastas
 				return true;
 			}
+		}
+
+		/*
+// Abre o arquivo ou o cria se nao existir
+	public void openFile() {
+		try {
+			File file = new File(this.fileName);
+			if (!file.exists()) {
+				file.createNewFile(); // cria o arquivo o mesmo se nao existir
+			}
+			this.writer = new FileOutputStream(file, true); // true é para adicionar no final, o modo 'append'
+			this.writer.write(System.lineSeparator().getBytes());
+		} catch(Exception e) {
+			printException(e, "openFile");
+		}
+	}
+		*/
+
+		// verifica se existe a paasta 'bd/'. Se nao existir, a cria
+		private Boolean existBdDir(){
+			File file = new File(DEFAULT_FILEPATH);
+			if(!file.exists()){
+				file.createNewFile();
+				return true;
+			} else {
+				return false;
+			}
+
 		}
 
 		// Verifica se ha alguma pasta que tenha o nome SnapHot no diretorio
@@ -264,43 +325,43 @@ class TimerManagerBD extends TimerTask{
 }
 
 
-class Comando {
+// class Comando {
 
-	private int operacao;
-	private BigInteger chave;
-	private byte[] valor;
-	private PrintStream cliente;
+// 	private int operacao;
+// 	private BigInteger chave;
+// 	private byte[] valor;
+// 	private PrintStream cliente;
 
-	public Comando(int op, BigInteger ch, byte[] val, PrintStream cl) {
-		this.operacao = op;
-		this.chave = ch;
-		this.valor = val;
-		this.cliente = cl;
-	}
+// 	public Comando(int op, BigInteger ch, byte[] val, PrintStream cl) {
+// 		this.operacao = op;
+// 		this.chave = ch;
+// 		this.valor = val;
+// 		this.cliente = cl;
+// 	}
 
-	public int getOperacao() {
-		return operacao;
-	}
-	public BigInteger getChave() {
-		return chave;
-	}
-	public byte[] getValor() {
-		return valor;
-	}
-	public PrintStream getCliente() {
-		return cliente;
-	}
+// 	public int getOperacao() {
+// 		return operacao;
+// 	}
+// 	public BigInteger getChave() {
+// 		return chave;
+// 	}
+// 	public byte[] getValor() {
+// 		return valor;
+// 	}
+// 	public PrintStream getCliente() {
+// 		return cliente;
+// 	}
 
-	// Metodo para imprimir um objeto diretamente no 'print'
-	public String toString() {
-		String value = "";
-		if(this.operacao == 1 || this.operacao == 3){
-			value = " | " + new String(this.valor);
-		}
-		return "Comando = " + Integer.toString(this.operacao) + value;
-	}
+// 	// Metodo para imprimir um objeto diretamente no 'print'
+// 	public String toString() {
+// 		String value = "";
+// 		if(this.operacao == 1 || this.operacao == 3){
+// 			value = " | " + new String(this.valor);
+// 		}
+// 		return "Comando = " + Integer.toString(this.operacao) + value;
+// 	}
 
-}
+// }
 
 
 class Fila1Adder implements Runnable {
@@ -447,51 +508,51 @@ class MapManager implements Runnable {
 }
 
 
-class Mapa {
+// class Mapa {
 
-	private Map < BigInteger, byte[] > mapa;
+// 	private Map < BigInteger, byte[] > mapa;
 
-	public Mapa() {
-		this.mapa = new HashMap < >();
-	}
+// 	public Mapa() {
+// 		this.mapa = new HashMap < >();
+// 	}
 
-	public boolean existe(BigInteger o1) {
-		if (mapa.get(o1) == null) return false;
-		else return true;
-	}
+// 	public boolean existe(BigInteger o1) {
+// 		if (mapa.get(o1) == null) return false;
+// 		else return true;
+// 	}
 
-	public int create(BigInteger o1, byte[] o2) {
-		if (!existe(o1)) {
-			mapa.put(o1, o2);
-			return 0;
-		} else return - 1;
-	}
+// 	public int create(BigInteger o1, byte[] o2) {
+// 		if (!existe(o1)) {
+// 			mapa.put(o1, o2);
+// 			return 0;
+// 		} else return - 1;
+// 	}
 
-	public int update(BigInteger o1, byte[] o2) {
-		if (existe(o1)) {
-			mapa.remove(o1);
-			mapa.put(o1, o2);
-			return 0;
-		} else return 1;
-	}
+// 	public int update(BigInteger o1, byte[] o2) {
+// 		if (existe(o1)) {
+// 			mapa.remove(o1);
+// 			mapa.put(o1, o2);
+// 			return 0;
+// 		} else return 1;
+// 	}
 
-	public int delete(BigInteger o1) {
-		if (existe(o1)) {
-			mapa.remove(o1);
-			return 0;
-		} else return 1;
-	}
+// 	public int delete(BigInteger o1) {
+// 		if (existe(o1)) {
+// 			mapa.remove(o1);
+// 			return 0;
+// 		} else return 1;
+// 	}
 
-	public byte[] read(BigInteger o1) {
-		return mapa.get(o1);
-	}
+// 	public byte[] read(BigInteger o1) {
+// 		return mapa.get(o1);
+// 	}
 
-	public Map < BigInteger,
-	byte[] > getMapa() {
-		return mapa;
-	}
+// 	public Map < BigInteger,
+// 	byte[] > getMapa() {
+// 		return mapa;
+// 	}
 
-}
+// }
 
 
 class LogFileManager implements Runnable {
@@ -690,32 +751,32 @@ class LogFileManager implements Runnable {
 }
 
 
-class Record {
+// class Record {
 
-	private BigInteger key;
-	private String label;
-	private byte[] data;
+// 	private BigInteger key;
+// 	private String label;
+// 	private byte[] data;
 
-	// Estrutura para agrupar todos os dados
-	Record(BigInteger key, String label) {
-		this.key = key;
-		this.label = label;
-		this.data = null;
-	}
+// 	// Estrutura para agrupar todos os dados
+// 	Record(BigInteger key, String label) {
+// 		this.key = key;
+// 		this.label = label;
+// 		this.data = null;
+// 	}
 
-	Record(BigInteger key, String label, byte[] data) {
-		this.key = key;
-		this.label = label;
-		this.data = data;
-	}
+// 	Record(BigInteger key, String label, byte[] data) {
+// 		this.key = key;
+// 		this.label = label;
+// 		this.data = data;
+// 	}
 
-	public byte[] getData() {
-		return data;
-	}
-	public BigInteger getKey() {
-		return key;
-	}
-	public String getLabel() {
-		return label;
-	}
-}
+// 	public byte[] getData() {
+// 		return data;
+// 	}
+// 	public BigInteger getKey() {
+// 		return key;
+// 	}
+// 	public String getLabel() {
+// 		return label;
+// 	}
+// }
