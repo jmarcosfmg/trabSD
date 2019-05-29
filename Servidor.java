@@ -86,7 +86,13 @@ PARTE DE RAFAEL: LOG E SNAPSHOT E BD:
 	+ Salva SnapSHot e Log
 	+ Verifica se há mais de 3 pastas
 		+ identificar a ultima pasta
-
+	
+	* ================ ATENÇAO ==================
+	* Se atente com a diferneça entre a inicializaçao e uma execuçâo nromal
+	* Se atente ao fato de pastsa nâo existirem no inicio. Fazer essa verificaçâo e crialas se nao existir
+	* ==> Ele quer que tenha um arquivo de configuraçâo: usar JSON
+	* ==> PErguntar se pode ser array de Char para usar JSON
+	* ==> Ele quer que exista arquivos de teste para executar automaticamente as cosias da parte 1
 
 */
 class TimerManagerBD extends TimerTask{
@@ -99,7 +105,8 @@ class TimerManagerBD extends TimerTask{
 		private final String LOG_FILE = "log";
 		private final String SNAP_FILE = "snap";
 		private final String POINT = ".";
-		private final String DEFAULT_FILEPATH = MY_DIRECTORY + "/" + "bd";
+		private final String REGEX_POINT = "\\.";
+		private final String DEFAULT_FILEPATH_DB = MY_DIRECTORY + "/" + "db";
 		
 		public TimerManagerBD(Mapa mapa){
 			this.mapa = mapa;
@@ -107,100 +114,104 @@ class TimerManagerBD extends TimerTask{
 
 		@Override
 		public void run() {
-			/**
-			 * ================ ATENÇAO ==================
-			 * Se atente com a diferneça entre a inicializaçao e uma execuçâo nromal
-			 * Se atente ao fato de pastsa nâo existirem no inicio. Fazer essa verificaçâo e crialas se nao existir
-			 * ==> Ele quer que tenha um arquivo de configuraçâo: usar JSON
-			 * ==> PErguntar se pode ser array de Char para usar JSON
-			 * ==> Ele quer que exista arquivos de teste para executar automaticamente as cosias da parte 1
-			*/
-			int nexCounter = 88;
+			
+			int nexCounter = 0;
+			List<Integer> listCounters = null;
 
 			// task to run goes here
-			System.out.println("Hello !!!");
+			System.out.println("TIME TASKER DB MANAGER !!!");
 
-			Boolean exist = existBdDir();
-			Boolean firstExecution = !exist;
-			if(!exist){
-				System.out.println("nao havia o direotiro, entao foi criado bd/ ");
-			}
+			// Verifica se a basta BD existe
+			Boolean existDB = checkDbDirectory();
+			if(!existDB){
+				System.out.println("ERRO NA CRIACAO DA PASTA DB OU NAO EXISTE!");
+				System.exit(1);
+			} 
+
+			// Verifica se essa eh a primeira execucao
+			Boolean firstExecution = firstExecution();
 			
-			// log começa com zero e o primeiro numero sera 1
+			// Primeira Execucao: O log começa com o contador 1
 			if(firstExecution){
 				nexCounter = 1; 
-
 			}
 
-			// Busca descobrir qual sera o proxmio counter a partir das pastas que ja existem
+			// Não eh a primeira execucao : uscara o proximo contado apartir dos numeros que ja existem
 			if(!firstExecution){
-				List<String> listDirectories = splitListOfFilesByType( listDirectory(TimerManagerBD.MY_DIRECTORY), SNAP_SHOT_DIR );
-			  nexCounter = getNextCounter(listDirectories);
-
+				listCounters = getListCounters( listDirectory(DEFAULT_FILEPATH_DB) );
+				nexCounter = listCounters.get(0) + 1;
 			}
 			
-			System.out.println(nexCounter);
-
-			String nextDirFilePath = DEFAULT_FILEPATH + "/" + SNAP_SHOT_DIR + POINT + Integer.toString(nexCounter);
+			// Define os nomes dos arquivos: diretorio, log e snap
+			String nextDirFilePath = DEFAULT_FILEPATH_DB + "/" + SNAP_SHOT_DIR + POINT + Integer.toString(nexCounter);
 			String nextSnapFilePath = nextDirFilePath + "/" + SNAP_FILE + POINT + Integer.toString(nexCounter);
 			String nextLogFilePath = nextDirFilePath + "/" + LOG_FILE + POINT + Integer.toString(nexCounter - 1);
 
-			new File(nextDirFilePath).mkdir(); // cria diretorio
+			// Criar arquivos
+			new File(nextDirFilePath).mkdir(); 
 
-			/** SALVA ARQUIVO DE LOG */
-			/** SALVA SNAP_SHOT */
+			// TODO : SALVAR LOG e SALAV SNAP_SHOT
 
-			// Verifica se vai precisar deletar algum arquivo
+			// Verifica se vai precisar deletar algum arquivo, so ocrorre quenao nao eh a primeira execucao
 			if(!firstExecution){
-
+				if(listCounters.size() >= 3){
+					int fouthNumber = listCounters.get(2);
+					String dirDeleted = DEFAULT_FILEPATH_DB + "/" + SNAP_SHOT_DIR + POINT + Integer.toString(fouthNumber);
+					deleteDirectory(dirDeleted);
+				}
 			}
-
-
-			// Salav arquivos
-
-			// List<String> files;
-			// List<String> direc;
-			
-			// List<String>[] returnList = listFilesOfDirectory(MY_DIRECTORY);
-			// files = returnList[0];
-			// direc = returnList[1];
-
-			// List<String> listDirectories = splitListOfFilesByType( listDirectory(TimerManagerBD.MY_DIRECTORY), SNAP_SHOT_DIR );
-			// int nexCounter = getNextCounter(listDirectories);
-
-			
-
 
 		}
 
-		// Retorna um array de duas posiçoes com array dinmaicos que tem
-		// respectivamente a lista de arquivos e de direotiros do diretorio passado em parametro
-		/************** Esta comentado posi talvez nâo vou precisar usar */
-		// private List<String>[] listFilesOfDirectory(String directory){
+		/**
+		 * Verifica se o direotiro existe, se nao o cria.
+		 * @return true se 'db/' existir ou se for criado corretamente. 'false' se der algum erro ao crialo
+		 */
+		private Boolean checkDbDirectory(){
+			File dir = new File(DEFAULT_FILEPATH_DB);
+			try {
+				if(!dir.exists()){
+					Boolean resultMkdir = dir.mkdirs();
+					return resultMkdir;
+				} else {
+					return true;
+				}
+			} catch (Exception e) {
+				System.out.println(e.toString());
+				e.printStackTrace();
+				return false;
+			}
+		}
 
-		// 	List<String>[] returnList = new ArrayList<String>[2];
-		// 	returnList[0]= new ArrayList<String>(); // arquivos
-		// 	returnList[1]= new ArrayList<String>(); // diretorio
-
-		// 	File folder = new File(directory);
-    // 	File[] listOfFiles = folder.listFiles();
-			
-		// 	for (int i = 0; i < listOfFiles.length; i++) {
-		// 		if (listOfFiles[i].isFile()) {
-		// 			returnList[0].add(listOfFiles[i].getName());
-		// 		} else if (listOfFiles[i].isDirectory()) {
-		// 			returnList[1].add(listOfFiles[i].getName());
-		// 		}
-		// 	}
-   
-		// 	return returnList;
-		// }
-
-		// Retorna uma lista de diretorios de um diretorio
+		/**
+		 * Verifica se ja existe alguma pasta 'SnapShot' 'db/'
+		 * @return true: se existir nao exixtir a pasta, entao eh a primeira execucao
+		 * false: se existir alguma pasta 'SnapSHot'
+		 */
+		private Boolean firstExecution(){
+			List<String> listDir = listDirectory(DEFAULT_FILEPATH_DB);
+			if(listDir.isEmpty()){
+				return true;
+			} else {
+				for (String dir : listDir) {
+					if(isTypeFile(dir, SNAP_SHOT_DIR)){
+						return false;
+					}
+				}
+			}
+			return true;
+		}
+		
+		/**
+		 * Retorna a lista de arquivos do filepath passado
+		 * @param directory
+		 * 		Direotiro a ser analisado
+		 * @return Lista de String dos arquivos desse diretorio
+		 */
 		private List<String> listDirectory(String directory){
 			List<String> listDirectories = new ArrayList<String>();
 			File folder = new File(directory);
-    	File[] listOfFiles = folder.listFiles();
+			File[] listOfFiles = folder.listFiles();
 			for (int i = 0; i < listOfFiles.length; i++) {
 				if (listOfFiles[i].isDirectory()) {
 					listDirectories.add(listOfFiles[i].getName());
@@ -209,57 +220,14 @@ class TimerManagerBD extends TimerTask{
 			return listDirectories;
 		}
 
-		// Verifica se ha pelo menos uma pasta com "SnapShot" valido
-		private Boolean existSnapShot(List<String> listDirectories){
-			if(listDirectories.isEmpty()){
-				return false;
-			} else{
-				// verificar se tem as pastas
-				return true;
-			}
-		}
-
-		/*
-// Abre o arquivo ou o cria se nao existir
-	public void openFile() {
-		try {
-			File file = new File(this.fileName);
-			if (!file.exists()) {
-				file.createNewFile(); // cria o arquivo o mesmo se nao existir
-			}
-			this.writer = new FileOutputStream(file, true); // true é para adicionar no final, o modo 'append'
-			this.writer.write(System.lineSeparator().getBytes());
-		} catch(Exception e) {
-			printException(e, "openFile");
-		}
-	}
-		*/
-
-		// verifica se existe a paasta 'bd/'. Se nao existir, a cria
-		private Boolean existBdDir(){
-			File file = new File(DEFAULT_FILEPATH);
-			if(!file.exists()){
-				file.createNewFile();
-				return true;
-			} else {
-				return false;
-			}
-
-		}
-
-		// Verifica se ha alguma pasta que tenha o nome SnapHot no diretorio
-		private Boolean existSnapShotDirectory(List<String> listDirectories){
-			for (String dir : listDirectories) {
-					if(isTypeFile(dir, SNAP_SHOT_DIR)){
-						return true;
-					}
-			}
-			return false;
-		}
-
-		// Verifica se um arquivo/pasta é de um certo tipo
+		/**
+		 * Verifica para o arquivo "file.ext" se "file" == "type". Identifica se eh um dos 3 tipos de arquivos do BD
+		 * @param file
+		 * @param type
+		 * @return Bool
+		 */
 		private Boolean isTypeFile(String file, String type){
-			String[] splitedString = file.split(POINT);
+			String[] splitedString = file.split(REGEX_POINT); // usa regex e '.' eh um char especial em regex
 			if(splitedString[0].equals(type)){
 				return true;
 			} else {
@@ -267,49 +235,42 @@ class TimerManagerBD extends TimerTask{
 			}
 		}
 
-		// retorna a lista de string de somente aquilo que eh de um certo tipo
-		// tipo, nas patas bd, passando uma lista e "Snapshit" so vai voltar pastas que comecem com SnapShot
-		private List<String> splitListOfFilesByType(List<String> files, String type){
-			List<String> filesOfType = new ArrayList<String>();
-			for (String arq : files) {
-				if(isTypeFile(arq, type)){
-					filesOfType.add(arq);
-				}
-			}
-			return filesOfType;
-		}
-		
-		// Retorna um array list de inteiros 
+		/**
+		 * Conveter uma uma de arq/dir "file.number" para uma lista de inteiros com SOMENTE "numbers". Ex: ["arq.1", "arq.2"] ==> [1,2]
+		 * @param listDirectories
+		 * @return
+		 */
 		private List<Integer> convertArrayStringToInt(List<String> listDirectories){
 			List<Integer> intList = new ArrayList<Integer>();
 			String aux[];
 			String dirNumber;
 			for (String dir : listDirectories) {
-				aux = dir.split(POINT);
+				aux = dir.split(REGEX_POINT);
 				dirNumber = aux[1];
 				intList.add(Integer.parseInt(dirNumber));
 			}
 			return intList;
 		}
 
-		// Retorno o proximo contador a ser usado.
-		private int getNextCounter(List<String> listDirectories){
+		/**
+		 * Pega os identificadores do arquivo/pasta e retorna uma lista ordenada para usalo depois para pegar
+		 * o proximo valor do SNapachot e qual deleter se precisar
+		 * @param listDirectories
+		 * 		Lista dos nomes de arquivos/pastas 
+		 * @return
+		 * 		Lista em ordem descendente [10, 9, 8, 7...] dos identificadores encontrados
+		 */
+		private List<Integer> getListCounters(List<String> listDirectories){
 			List<Integer> listNumbers = convertArrayStringToInt(listDirectories);
-			int max = Collections.max(listNumbers);
-			return max + 1;
+			Collections.sort(listNumbers);
+			Collections.reverse(listNumbers);
+			return listNumbers;
 		}
 
-		// Retorna o numero da pasta a ser deletada ou -1 se nao achar
-		private int getCounterToDelete(List<String> listDirectories){
-			List<Integer> listCountsDir = convertArrayStringToInt(listDirectories);
-			if(listCountsDir.size() <= 3){
-				return -1;
-			} else{
-				return Collections.min(listCountsDir);
-			}
-		}
-
-		// Deleta um direotiro: e tudo que tiver dentro dele. Passa todo o seu FilePath
+		/**
+		 * Deleta diretorio. para isso, delete todos os arquivos que tiver dentro tambem
+		 * @param directory
+		 */
 		private void deleteDirectory(String directory){
 			File folder = new File(directory);
     	File[] listOfFiles = folder.listFiles();
@@ -320,49 +281,7 @@ class TimerManagerBD extends TimerTask{
 			folder.delete();
 		}
 
-	
-
 }
-
-
-// class Comando {
-
-// 	private int operacao;
-// 	private BigInteger chave;
-// 	private byte[] valor;
-// 	private PrintStream cliente;
-
-// 	public Comando(int op, BigInteger ch, byte[] val, PrintStream cl) {
-// 		this.operacao = op;
-// 		this.chave = ch;
-// 		this.valor = val;
-// 		this.cliente = cl;
-// 	}
-
-// 	public int getOperacao() {
-// 		return operacao;
-// 	}
-// 	public BigInteger getChave() {
-// 		return chave;
-// 	}
-// 	public byte[] getValor() {
-// 		return valor;
-// 	}
-// 	public PrintStream getCliente() {
-// 		return cliente;
-// 	}
-
-// 	// Metodo para imprimir um objeto diretamente no 'print'
-// 	public String toString() {
-// 		String value = "";
-// 		if(this.operacao == 1 || this.operacao == 3){
-// 			value = " | " + new String(this.valor);
-// 		}
-// 		return "Comando = " + Integer.toString(this.operacao) + value;
-// 	}
-
-// }
-
 
 class Fila1Adder implements Runnable {
 
@@ -750,33 +669,3 @@ class LogFileManager implements Runnable {
 
 }
 
-
-// class Record {
-
-// 	private BigInteger key;
-// 	private String label;
-// 	private byte[] data;
-
-// 	// Estrutura para agrupar todos os dados
-// 	Record(BigInteger key, String label) {
-// 		this.key = key;
-// 		this.label = label;
-// 		this.data = null;
-// 	}
-
-// 	Record(BigInteger key, String label, byte[] data) {
-// 		this.key = key;
-// 		this.label = label;
-// 		this.data = data;
-// 	}
-
-// 	public byte[] getData() {
-// 		return data;
-// 	}
-// 	public BigInteger getKey() {
-// 		return key;
-// 	}
-// 	public String getLabel() {
-// 		return label;
-// 	}
-// }

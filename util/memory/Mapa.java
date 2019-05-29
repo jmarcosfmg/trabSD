@@ -1,5 +1,7 @@
 package util.memory;
 
+import java.util.Map;
+import java.util.HashMap;
 import java.math.BigInteger; 
 
 public class Mapa {
@@ -41,8 +43,7 @@ public class Mapa {
 		return mapa.get(o1);
 	}
 
-	public Map < BigInteger,
-	byte[] > getMapa() {
+	public Map < BigInteger, byte[] > getMapa() {
 		return mapa;
 	}
 
