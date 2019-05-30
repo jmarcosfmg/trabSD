@@ -20,8 +20,6 @@ public class Servidor extends Thread {
 
 	private static final int TIME_UPDATE_BD = 5 * 1000; // mili segundos
 
-	
-	
 	public static void main(String args[]) {
 		try {
 
@@ -32,15 +30,22 @@ public class Servidor extends Thread {
 			t1.start();
 
 			MapManager mapManager = new MapManager(Fila_F2);
-			TimerTask task = new TimerManagerBD(mapManager.getMapa()); // Thread que executa a cada u segundos. Tem a referencia ao Mapa da maemoria, a classe 'Mapa'
+			
 			Timer timer = new Timer();
 			// schedules the task to be run in an interval 
-			timer.scheduleAtFixedRate(task, 0, TIME_UPDATE_BD);
+			// timer.scheduleAtFixedRate(task, TIME_UPDATE_BD, TIME_UPDATE_BD);
 			Thread t2 = new Thread(mapManager); //pega o que estiver na fila f2 e faz as operacoes na memoria
 			t2.start();
 
-			Thread t3 = new Thread(new LogFileManager(Fila_F3, Fila_F2)); //pega o que estiver na fila f3 e faz as operacoes do log
+			// modificado para timeTask ter referencia para ele
+			LogFileManager logFileManager = new LogFileManager(Fila_F3, Fila_F2);
+
+			TimerTask task = new TimerManagerBD(mapManager.getMapa(), logFileManager); // Thread que executa a cada u segundos. Tem a referencia ao Mapa da maemoria, a classe 'Mapa'
+
+			Thread t3 = new Thread(logFileManager); //pega o que estiver na fila f3 e faz as operacoes do log
 			t3.start();
+
+			timer.scheduleAtFixedRate(task, TIME_UPDATE_BD, TIME_UPDATE_BD);
 			System.out.println("Servidor inicializado");
 			// Loop principal.
 			while (true) {
@@ -95,23 +100,27 @@ PARTE DE RAFAEL: LOG E SNAPSHOT E BD:
 	* ==> Ele quer que exista arquivos de teste para executar automaticamente as cosias da parte 1
 
 */
+
 class TimerManagerBD extends TimerTask{
 
 		private Mapa mapa;
+		private LogFileManager logFileManager;
 
 		public static final String MY_DIRECTORY = System.getProperty("user.dir");
 
-		private final String SNAP_SHOT_DIR = "SnapShot";
+		public static String SNAP_SHOT_DIR = "SnapShot";
 		private final String LOG_FILE = "log";
 		private final String SNAP_FILE = "snap";
 		private final String POINT = ".";
-		private final String REGEX_POINT = "\\.";
-		private final String DEFAULT_FILEPATH_DB = MY_DIRECTORY + "/" + "db";
+		public static String REGEX_POINT = "\\.";
+		public static String DEFAULT_FILEPATH_DB = MY_DIRECTORY + "/" + "db";
 		
-		public TimerManagerBD(Mapa mapa){
+		public TimerManagerBD(Mapa mapa, LogFileManager logFileManager){
 			this.mapa = mapa;
+			this.logFileManager = logFileManager;
 		}
 
+		// TODO: So salvar se haver alguma mudaça (por uma flag) ou aumentar o tempo u
 		@Override
 		public void run() {
 			
@@ -119,7 +128,7 @@ class TimerManagerBD extends TimerTask{
 			List<Integer> listCounters = null;
 
 			// task to run goes here
-			System.out.println("TIME TASKER DB MANAGER !!!");
+			System.out.println("\tTIME TASKER DB MANAGER !!!");
 
 			// Verifica se a basta BD existe
 			Boolean existDB = checkDbDirectory();
@@ -150,9 +159,11 @@ class TimerManagerBD extends TimerTask{
 			// Criar arquivos
 			new File(nextDirFilePath).mkdir(); 
 
-			// TODO : SALVAR LOG e SALAV SNAP_SHOT
+			// Salva SnapShot e Log
+			saveSnapshot(mapa.getMapa(), nextSnapFilePath);
+			saveLog(nextLogFilePath);
 
-			// Verifica se vai precisar deletar algum arquivo, so ocrorre quenao nao eh a primeira execucao
+			// Verifica se vai precisar deletar algum arquivo, so ocrorre quando nao eh a primeira execucao
 			if(!firstExecution){
 				if(listCounters.size() >= 3){
 					int fouthNumber = listCounters.get(2);
@@ -161,6 +172,44 @@ class TimerManagerBD extends TimerTask{
 				}
 			}
 
+		}
+
+		/**
+		 * Na Realidadee, nao eh TImeManagerBD que salva o Log, ele so vai setar ao LogFileManager
+		 * Para salvar em outro arquivo
+		 * @param logFile novo arquivo de log
+		 */
+		private void saveLog(String logFile){
+			this.logFileManager.setLogFile(logFile);
+		}
+
+		/**
+		 * Salva SnaShot, percorrendo pelo mapeamento
+		 * @param snapMap HashMap do Banco na memoria
+		 * @param snapFile nome do arquivo
+		 */
+		private void saveSnapshot(Map<BigInteger, byte[]>  snapMap, String snapFile){
+			FileOutputStream writer;
+			// Abre o Arquivo ou o cria
+			File file = new File(snapFile);
+			try {
+				if (!file.exists()) {
+					file.createNewFile(); 
+				}
+				writer = new FileOutputStream(file, true);
+				// Itera sobre o mapa e grava no arquivo
+				for (Map.Entry<BigInteger, byte[]> entry : snapMap.entrySet()) {
+					writer.write( ( entry.getKey().toString() + "\n").getBytes() );
+					writer.write( (new String(entry.getValue()) + "\n").getBytes() );
+					writer.flush();
+					System.out.println(entry.getKey() + "/" + new String(entry.getValue()));
+				}
+				// Fecha arquivo
+				writer.close();
+			} catch (Exception e) {
+				System.err.println("Erro ao salvar SnapShot");
+				e.printStackTrace();
+			}
 		}
 
 		/**
@@ -187,14 +236,14 @@ class TimerManagerBD extends TimerTask{
 		 * Verifica se ja existe alguma pasta 'SnapShot' 'db/'
 		 * @return true: se existir nao exixtir a pasta, entao eh a primeira execucao
 		 * false: se existir alguma pasta 'SnapSHot'
-		 */
-		private Boolean firstExecution(){
+		 * */
+		public static Boolean firstExecution(){
 			List<String> listDir = listDirectory(DEFAULT_FILEPATH_DB);
 			if(listDir.isEmpty()){
 				return true;
 			} else {
 				for (String dir : listDir) {
-					if(isTypeFile(dir, SNAP_SHOT_DIR)){
+					if(isTypeFile(dir, TimerManagerBD.SNAP_SHOT_DIR)){
 						return false;
 					}
 				}
@@ -208,7 +257,7 @@ class TimerManagerBD extends TimerTask{
 		 * 		Direotiro a ser analisado
 		 * @return Lista de String dos arquivos desse diretorio
 		 */
-		private List<String> listDirectory(String directory){
+		public static List<String> listDirectory(String directory){
 			List<String> listDirectories = new ArrayList<String>();
 			File folder = new File(directory);
 			File[] listOfFiles = folder.listFiles();
@@ -226,8 +275,8 @@ class TimerManagerBD extends TimerTask{
 		 * @param type
 		 * @return Bool
 		 */
-		private Boolean isTypeFile(String file, String type){
-			String[] splitedString = file.split(REGEX_POINT); // usa regex e '.' eh um char especial em regex
+		public static Boolean isTypeFile(String file, String type){
+			String[] splitedString = file.split(TimerManagerBD.REGEX_POINT); // usa regex e '.' eh um char especial em regex
 			if(splitedString[0].equals(type)){
 				return true;
 			} else {
@@ -240,12 +289,12 @@ class TimerManagerBD extends TimerTask{
 		 * @param listDirectories
 		 * @return
 		 */
-		private List<Integer> convertArrayStringToInt(List<String> listDirectories){
+		public static List<Integer> convertArrayStringToInt(List<String> listDirectories){
 			List<Integer> intList = new ArrayList<Integer>();
 			String aux[];
 			String dirNumber;
 			for (String dir : listDirectories) {
-				aux = dir.split(REGEX_POINT);
+				aux = dir.split(TimerManagerBD.REGEX_POINT);
 				dirNumber = aux[1];
 				intList.add(Integer.parseInt(dirNumber));
 			}
@@ -260,7 +309,7 @@ class TimerManagerBD extends TimerTask{
 		 * @return
 		 * 		Lista em ordem descendente [10, 9, 8, 7...] dos identificadores encontrados
 		 */
-		private List<Integer> getListCounters(List<String> listDirectories){
+		public static List<Integer> getListCounters(List<String> listDirectories){
 			List<Integer> listNumbers = convertArrayStringToInt(listDirectories);
 			Collections.sort(listNumbers);
 			Collections.reverse(listNumbers);
@@ -282,6 +331,7 @@ class TimerManagerBD extends TimerTask{
 		}
 
 }
+
 
 class Fila1Adder implements Runnable {
 
@@ -477,16 +527,29 @@ class MapManager implements Runnable {
 class LogFileManager implements Runnable {
 
 	private BlockingQueue < Comando > Fila_F3;
-	private final String fileName = "log"; // Valor constante do nome do arquivo
+	private String logFile; // Valor que nao sera mais constante
+	private String snapStartFile; 
 	public FileOutputStream writer;
 
 	public LogFileManager(BlockingQueue < Comando > f3, BlockingQueue < Comando > f2) {
 		Fila_F3 = f3;
-		// Entrada Inicial de comandos em F2 a partir do arquivo (feito uma unica vez, ao start do server)
-		/* Nao passa por F1 pois ai ele distribuiria para F3, que seria tirada na thread de LogFIleManger (essa mesma)
+		/* Entrada Inicial de comandos em F2 a partir do arquivo (feito uma unica vez, ao start do server)
+		   Nao passa por F1 pois ai ele distribuiria para F3, que seria tirada na thread de LogFIleManger (essa mesma)
 			 entao haveria uma duplicação no arquivo. Para evitar isso, mandamos direto para F2 que trata comandos para a memoria
+
+			// F1 : Fila que distribui para F2 e F3
+			// F2 : Fila de comandos retiradas pelo MapManager para salavar na memoria
+			// F3 : FIla de comandos retirods pelo LogFileManager para salvar no disco
 		*/
-		loadRecordsFromFile(f2);
+
+		if(!TimerManagerBD.firstExecution()){
+			// Nao eh primeira execucao: vai saber e carrega o ultimo SnapShot
+			int lastSnapDir = TimerManagerBD.getListCounters( TimerManagerBD.listDirectory( TimerManagerBD.DEFAULT_FILEPATH_DB)).get(0);
+			this.snapStartFile = TimerManagerBD.DEFAULT_FILEPATH_DB + "/SnapShot." + Integer.toString(lastSnapDir) + "/" + "snap." + Integer.toString(lastSnapDir);
+			loadRecordsFromFile(f2); // inicializa agora pelo snapShot
+		} else {
+			this.logFile = startLogFile(); // busca o ultimo arquivo de log
+		}
 	}
 
 	// Recebe comandos de F3 para inserir no arquivo
@@ -499,7 +562,8 @@ class LogFileManager implements Runnable {
 		while (true) {
 			try {
 				comando = (Comando) Fila_F3.take();
-				openFile();
+				openFile(this.logFile);
+				System.out.println("LOG FILE MANAGER ENTROU AKI APRA GRAVAR EM : " + this.logFile);
 				opcao = comando.getOperacao();
 				// CREATE
 				if (opcao == 1) {
@@ -522,6 +586,50 @@ class LogFileManager implements Runnable {
 
 			}
 		}
+	}
+
+	/**
+	 * Descobre qual vai ser o filePath do arquivo de log ATUAL. É necessario pois o TImeBDMnager so vai rodar depois de um tempo, 
+	 * Entao LogFileManager precisa ele buscar ele mesmo no incio. Depois fica a crgo de TImeBDManager mudar isso
+	 * de log
+	 * @return log File Path
+	 */
+	public String startLogFile(){
+		Boolean firstExec = TimerManagerBD.firstExecution();
+		int lastSnapDir;
+		String logFilePath;
+		// Cria a pasta inicia
+		// cria o primiero arquivo de log seta o primeiro arquivo de log
+		if(firstExec){
+			lastSnapDir = 1;
+			new File(TimerManagerBD.DEFAULT_FILEPATH_DB + "/SnapShot." + Integer.toString(lastSnapDir)).mkdir();
+			return TimerManagerBD.DEFAULT_FILEPATH_DB + "/SnapShot." + Integer.toString(lastSnapDir) + "/" + "log." + Integer.toString(lastSnapDir - 1);
+		} else {
+			// Vai esperar haver um ultimo arquivo de log e pegar esse ultimo
+			lastSnapDir = TimerManagerBD.getListCounters( TimerManagerBD.listDirectory( TimerManagerBD.DEFAULT_FILEPATH_DB)).get(0);
+			logFilePath = TimerManagerBD.DEFAULT_FILEPATH_DB + "/SnapShot." + Integer.toString(lastSnapDir) + "/" + "log." + Integer.toString(lastSnapDir -1);
+			System.out.println("Start Server : logFilePath : "  + logFilePath);
+			// testa se esse arquivo existe, ele eh o que vai ser inicializado, entao, eh importante
+			try {
+				File file = new File(logFilePath);
+				if (!file.exists()) {
+					System.out.println("ERRO : DEVERIA HAVER O ARQUIVO DE LOG : " + logFilePath + " MAS PARECE QUE NAO EXISTE!");
+					System.exit(1);
+				}
+			} catch(Exception e) {
+				System.out.println("logFile : " + logFile);
+				printException(e, "existFile");
+			}
+			return logFilePath;
+		}
+	}
+
+	/**
+	 * Usado pelo TimeMangerBD para seta o novo filepath do log a cada execução
+	 * @param logFile
+	 */
+	public void setLogFile(String logFile){
+		this.logFile = logFile;
 	}
 
 	// Carrega Records do log para a memoria
@@ -565,7 +673,11 @@ class LogFileManager implements Runnable {
 		} catch(InterruptedException e) {}
 	}
 
-	// Retorna uma Lista de 'Record's, que ssao as instancais ldias do arquivo log.txt
+	/**
+	 * Retorna uma lista de REcords. DIferetne da Primeira entrega, vai pegar de um arquivo de SnapSHot
+	 * e por iso o processo foi umpouco modidifcado.
+	 * @return
+	 */
 	public List < Record > readRecords() {
 		List < Record > listrecord = new ArrayList < Record > ();
 
@@ -575,23 +687,39 @@ class LogFileManager implements Runnable {
 		byte[] dataLine;
 		String line;
 		String[] splitted;
-		existFile();
+		// modificado para pegar de snap
+		existFile(this.snapStartFile);
 
-		try (BufferedReader bufferedReader = new BufferedReader(new FileReader(this.fileName))) {
+		// TODO: AKI SERA O MAIS NOVO ARQUIVO DE SNAPSHOT
+		try (BufferedReader bufferedReader = new BufferedReader(new FileReader(this.snapStartFile))) {
 			while ((line = bufferedReader.readLine()) != null) {
+				
+				/////// Carregar um LOG FILE
+
+				// if (line.equals("")) {
+				// 	continue; // linha vazia sera pulada;
+				// }
+				// splitted = line.split(" ");
+				// labelOption = splitted[0];
+				// key = new BigInteger(splitted[1]);
+				// if (labelOption.equals("D")) { // DELETE
+				// 	aData = new Record(key, labelOption);
+				// } else { // CREATE OR UPDATE
+				// 	line = bufferedReader.readLine();
+				// 	dataLine = line.getBytes(); // vai ler a linha e agora vai guardar
+				// 	aData = new Record(key, labelOption, dataLine);
+				// }
+
+				////// CARREGAR UM SNAPSHOT
+
+				// line tem agora so o index
 				if (line.equals("")) {
 					continue; // linha vazia sera pulada;
 				}
-				splitted = line.split(" ");
-				labelOption = splitted[0];
-				key = new BigInteger(splitted[1]);
-				if (labelOption.equals("D")) { // DELETE
-					aData = new Record(key, labelOption);
-				} else { // CREATE OR UPDATE
-					line = bufferedReader.readLine();
-					dataLine = line.getBytes(); // vai ler a lionha e agora vai guardar
-					aData = new Record(key, labelOption, dataLine);
-				}
+				key = new BigInteger(line);
+				line = bufferedReader.readLine();
+				dataLine = line.getBytes(); // vai ler a linha e agora vai guardar
+				aData = new Record(key, "C", dataLine); // sempre um create do SnapSHot
 				listrecord.add(aData);
 			}
 			bufferedReader.close();
@@ -634,9 +762,9 @@ class LogFileManager implements Runnable {
 	}
 
 	// Abre o arquivo ou o cria se nao existir
-	public void openFile() {
+	public void openFile(String logFile) {
 		try {
-			File file = new File(this.fileName);
+			File file = new File(logFile);
 			if (!file.exists()) {
 				file.createNewFile(); // cria o arquivo o mesmo se nao existir
 			}
@@ -648,13 +776,14 @@ class LogFileManager implements Runnable {
 	}
 
 	// Verifica se o arquivo existe ou nao. Se nao, o cria
-	public void existFile() {
+	public void existFile(String logFile) {
 		try {
-			File file = new File(this.fileName);
+			File file = new File(logFile);
 			if (!file.exists()) {
 				file.createNewFile(); // cria o arquivo o mesmo se nao existir
 			}
 		} catch(Exception e) {
+			System.out.println("\t => logFile : " + logFile);
 			printException(e, "existFile");
 		}
 	}
